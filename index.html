@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FocusGuard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f14;
+      --surface:   #151820;
+      --surface2:  #1c2030;
+      --border:    #262c3e;
+      --border2:   #333a52;
+      --text:      #c8cfe0;
+      --text-dim:  #5a6480;
+      --text-mid:  #8891a8;
+      --accent:    #4f8ef7;
+      --accent2:   #3a6fd4;
+      --done:      #3ec98a;
+      --warn:      #f5a623;
+      --warn-bg:   rgba(245,166,35,0.12);
+      --parking:   #9b7fe8;
+      --line:      rgba(79,142,247,0.25);
+      --line-dash: rgba(155,127,232,0.3);
+      --glow:      rgba(79,142,247,0.15);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      overflow: hidden;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────────── */
+    #header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: 52px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 20px;
+      gap: 16px;
+    }
+    #header .logo {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px; font-weight: 500;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    #header .sep { flex: 1; }
+    #header .context-badge {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-family: 'DM Mono', monospace;
+      color: var(--text-mid);
+    }
+    .btn {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      color: var(--text-mid);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.primary {
+      background: var(--accent2);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .btn.primary:hover { background: var(--accent); }
+
+    /* ── MAIN CANVAS ─────────────────────────────────────────── */
+    #canvas {
+      position: fixed;
+      top: 52px; left: 0; right: 0; bottom: 0;
+    }
+    #canvas svg {
+      width: 100%; height: 100%;
+    }
+
+    /* ── PARKING LOT ZONE ────────────────────────────────────── */
+    .parking-zone-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      fill: var(--text-dim);
+    }
+
+    /* ── NODE STYLES (SVG) ───────────────────────────────────── */
+    .node-mission rect {
+      fill: var(--surface2);
+      stroke: var(--accent);
+      stroke-width: 1.5;
+      rx: 10;
+    }
+    .node-mission:hover rect { stroke: #7ab3ff; filter: url(#glow); }
+
+    .node-task rect {
+      fill: var(--surface);
+      stroke: var(--border2);
+      stroke-width: 1;
+      rx: 7;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .node-task:hover rect { stroke: var(--accent); }
+    .node-task.done rect { opacity: 0.45; }
+    .node-task.drift rect { stroke: var(--warn); }
+    .node-task.active-task rect { stroke: var(--accent); stroke-width: 1.5; }
+
+    .node-file rect {
+      fill: var(--surface);
+      stroke: var(--border);
+      stroke-width: 1;
+      rx: 5;
+      cursor: pointer;
+    }
+    .node-file:hover rect { stroke: var(--accent); }
+    .node-file.drift rect { stroke: var(--warn); }
+
+    .node-parking rect {
+      fill: var(--surface);
+      stroke: var(--parking);
+      stroke-width: 1;
+      rx: 20;
+      opacity: 0.75;
+      cursor: pointer;
+    }
+    .node-parking:hover rect { opacity: 1; }
+
+    .node-label {
+      fill: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      pointer-events: none;
+    }
+    .node-label.dim { fill: var(--text-dim); }
+    .node-label.accent { fill: var(--accent); font-weight: 500; }
+    .node-label.warn { fill: var(--warn); }
+    .node-label.parking-label { fill: var(--parking); font-size: 11px; }
+    .node-label.file-label { fill: var(--text-mid); font-size: 11px; font-family: 'DM Mono', monospace; }
+
+    .status-dot { pointer-events: none; }
+
+    .edge { fill: none; stroke: var(--line); stroke-width: 1; }
+    .edge-dash { fill: none; stroke: var(--line-dash); stroke-width: 1; stroke-dasharray: 4,4; }
+
+    /* ── DETAIL PANEL ─────────────────────────────────────────── */
+    #detail {
+      position: fixed;
+      top: 52px; right: 0; bottom: 0;
+      width: 320px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      padding: 24px 20px;
+      overflow-y: auto;
+      transform: translateX(100%);
+      transition: transform .25s cubic-bezier(.4,0,.2,1);
+      z-index: 50;
+    }
+    #detail.open { transform: translateX(0); }
+    #detail h3 {
+      font-size: 13px; font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    #detail .field { margin-bottom: 14px; }
+    #detail .field label {
+      display: block;
+      font-size: 10px; font-weight: 500;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    #detail .field .val {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    #detail .field .val.mono {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text-mid);
+    }
+    #detail .field .val.warn { color: var(--warn); }
+    .drift-box {
+      background: var(--warn-bg);
+      border: 1px solid rgba(245,166,35,.3);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 12px 0;
+    }
+    .drift-box .drift-title {
+      font-size: 11px; font-weight: 600;
+      color: var(--warn);
+      margin-bottom: 6px;
+    }
+    .drift-box .drift-entry {
+      font-size: 11px; color: var(--text-mid);
+      line-height: 1.6;
+    }
+    .close-btn {
+      position: absolute; top: 16px; right: 16px;
+      background: none; border: none;
+      color: var(--text-dim); font-size: 18px; cursor: pointer;
+    }
+    .close-btn:hover { color: var(--text); }
+    .confirm-btn {
+      margin-top: 12px;
+      width: 100%;
+      background: rgba(245,166,35,.15);
+      border: 1px solid rgba(245,166,35,.4);
+      border-radius: 6px;
+      color: var(--warn);
+      padding: 7px 0;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+    }
+    .confirm-btn:hover { background: rgba(245,166,35,.25); }
+
+    /* ── EXPORT TOAST ─────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--done); color: #0d1a12;
+      padding: 8px 20px; border-radius: 20px;
+      font-size: 12px; font-weight: 600;
+      opacity: 0; pointer-events: none;
+      transition: opacity .3s;
+      z-index: 200;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── LEGEND ───────────────────────────────────────────────── */
+    #legend {
+      position: fixed; bottom: 20px; left: 20px;
+      display: flex; gap: 14px; flex-wrap: wrap;
+      pointer-events: none;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10px; color: var(--text-dim);
+      font-family: 'DM Mono', monospace;
+    }
+    .legend-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="header">
+  <span class="logo">⬡ FocusGuard</span>
+  <span class="context-badge">📁 EKB / FocusGuard</span>
+  <span class="sep"></span>
+  <button class="btn" id="btn-load" title="FOCUS.md laden (File System Access API – Chrome/Edge)">📂 FOCUS.md laden</button>
+  <button class="btn primary" id="btn-export">⬆ AI Export</button>
+</div>
+
+<!-- SVG CANVAS -->
+<div id="canvas">
+  <svg id="svg"></svg>
+</div>
+
+<!-- DETAIL PANEL -->
+<div id="detail">
+  <button class="close-btn" id="detail-close">✕</button>
+  <div id="detail-content"></div>
+</div>
+
+<!-- LEGEND -->
+<div id="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#4f8ef7"></div>aktiver Task</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3ec98a"></div>erledigt</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f5a623"></div>Versions-Drift ⚠</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#9b7fe8"></div>Parking Lot</div>
+</div>
+
+<!-- TOAST -->
+<div id="toast">✓ AI-Kontext in Zwischenablage kopiert</div>
+
+<script>
+// ── DEMO DATA ──────────────────────────────────────────────────────────────
+const DATA = {
+  mission: {
+    id: "mission",
+    title: "FocusGuard MVP",
+    why: "Scope-Creep und Datei-Drift blockieren produktive KI-Sessions. Ohne Fokus-Tool verlieren wir täglich Zeit beim Wiederaufnehmen von Kontexten.",
+    mvp: "Interaktive Focus-Orbit-Visualisierung mit hardcodierten Daten, lauffähig im Browser ohne Build-Schritt.",
+    date: "2026-05-12",
+  },
+  tasks: [
+    {
+      id: "t1",
+      title: "Focus-Orbit SVG Layout",
+      status: "done",
+      priority: "high",
+      ref: "FGD_Konzept_v02.md",
+      refVersion: "0.1.0",
+      currentVersion: "0.2.0",
+      drift: true,
+      changelog: [
+        "0.2.0 — Visualisierung als primäre UI verankert",
+        "0.2.0 — Focus-Orbit-Modell und Interaktionsmodell ergänzt",
+        "0.2.0 — D3.js in Technologie-Stack aufgenommen",
+      ],
+    },
+    {
+      id: "t2",
+      title: "Interaktionsmodell implementieren",
+      status: "in-progress",
+      priority: "high",
+      ref: "FGD_Konzept_v02.md",
+      refVersion: "0.2.0",
+      currentVersion: "0.2.0",
+      drift: false,
+    },
+    {
+      id: "t3",
+      title: "FOCUS.md Datenformat definieren",
+      status: "open",
+      priority: "high",
+      ref: null,
+      drift: false,
+    },
+    {
+      id: "t4",
+      title: "File System Access API einbinden",
+      status: "open",
+      priority: "medium",
+      ref: "FGD_Architektur_v01.md",
+      refVersion: "0.1.0",
+      currentVersion: "0.1.0",
+      drift: false,
+    },
+    {
+      id: "t5",
+      title: "AI Context Export",
+      status: "open",
+      priority: "low",
+      ref: null,
+      drift: false,
+    },
+  ],
+  files: [
+    { id: "f1", name: "FGD_Konzept_v02.md", version: "0.2.0", drift: true },
+    { id: "f2", name: "FGD_Architektur_v01.md", version: "0.1.0", drift: false },
+  ],
+  parking: [
+    { id: "p1", title: "MCP-Server Integration", from: "Konzeptgespräch 2026-05-10" },
+    { id: "p2", title: "Obsidian Plugin", from: "Idee während t1-Bearbeitung" },
+    { id: "p3", title: "Mobile Web Support", from: "Backlog-Review" },
+  ],
+};
+
+// ── LAYOUT CONSTANTS ───────────────────────────────────────────────────────
+const TW = 190, TH = 44;
+const FW = 170, FH = 36;
+const MW = 200, MH = 64;
+const PW = 150, PH = 32;
+
+function layout(W, H) {
+  const cx = W / 2, cy = (H - 120) / 2 + 20;
+
+  // Mission center
+  DATA.mission.x = cx; DATA.mission.y = cy;
+
+  // Tasks — left column
+  const tLeft = DATA.tasks.filter(t => t.status !== "done" || true);
+  const tSpacing = Math.min(60, (H - 180) / (tLeft.length + 1));
+  const tStartY = cy - ((tLeft.length - 1) * tSpacing) / 2;
+  tLeft.forEach((t, i) => {
+    t.x = cx - 230;
+    t.y = tStartY + i * tSpacing;
+  });
+
+  // Files — right column (deduplicated by which tasks ref them)
+  const fSpacing = Math.min(60, (H - 180) / (DATA.files.length + 1));
+  const fStartY = cy - ((DATA.files.length - 1) * fSpacing) / 2;
+  DATA.files.forEach((f, i) => {
+    f.x = cx + 240;
+    f.y = fStartY + i * fSpacing;
+  });
+
+  // Parking lot — bottom strip
+  const pY = H - 80;
+  const pTotal = DATA.parking.length;
+  const pSpacing = Math.min(200, (W - 60) / pTotal);
+  const pStartX = cx - ((pTotal - 1) * pSpacing) / 2;
+  DATA.parking.forEach((p, i) => {
+    p.x = pStartX + i * pSpacing;
+    p.y = pY;
+  });
+}
+
+// ── RENDER ─────────────────────────────────────────────────────────────────
+const svg = d3.select("#svg");
+let W, H;
+
+function render() {
+  W = document.getElementById("canvas").clientWidth;
+  H = document.getElementById("canvas").clientHeight;
+  svg.attr("viewBox", `0 0 ${W} ${H}`);
+  svg.selectAll("*").remove();
+  layout(W, H);
+
+  // Defs
+  const defs = svg.append("defs");
+  const glow = defs.append("filter").attr("id","glow");
+  glow.append("feGaussianBlur").attr("stdDeviation","4").attr("result","blur");
+  const merge = glow.append("feMerge");
+  merge.append("feMergeNode").attr("in","blur");
+  merge.append("feMergeNode").attr("in","SourceGraphic");
+
+  const glowAccent = defs.append("filter").attr("id","glow-accent");
+  glowAccent.append("feGaussianBlur").attr("stdDeviation","6").attr("result","blur");
+  const merge2 = glowAccent.append("feMerge");
+  merge2.append("feMergeNode").attr("in","blur");
+  merge2.append("feMergeNode").attr("in","SourceGraphic");
+
+  // ── PARKING LOT ZONE ──
+  const pZoneY = H - 130;
+  svg.append("line")
+    .attr("x1", 20).attr("y1", pZoneY)
+    .attr("x2", W - 20).attr("y2", pZoneY)
+    .attr("stroke", "rgba(155,127,232,0.15)")
+    .attr("stroke-width", 1)
+    .attr("stroke-dasharray", "6,6");
+
+  svg.append("text")
+    .attr("x", 28).attr("y", pZoneY - 8)
+    .attr("class", "parking-zone-label")
+    .text("— Parking Lot");
+
+  // ── EDGES: Tasks → Mission ──
+  DATA.tasks.forEach(t => {
+    const x1 = t.x + TW / 2, y1 = t.y;
+    const x2 = DATA.mission.x - MW / 2, y2 = DATA.mission.y;
+    svg.append("path")
+      .attr("class", "edge")
+      .attr("d", `M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}`);
+  });
+
+  // ── EDGES: Mission → Files ──
+  DATA.files.forEach(f => {
+    const x1 = DATA.mission.x + MW / 2, y1 = DATA.mission.y;
+    const x2 = f.x - FW / 2, y2 = f.y;
+    svg.append("path")
+      .attr("class", "edge")
+      .attr("d", `M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}`);
+  });
+
+  // ── EDGES: Parking → Mission (dashed) ──
+  DATA.parking.forEach(p => {
+    svg.append("path")
+      .attr("class", "edge-dash")
+      .attr("d", `M${p.x},${p.y - PH/2} Q${p.x},${DATA.mission.y+40} ${DATA.mission.x},${DATA.mission.y + MH/2}`);
+  });
+
+  // ── MISSION NODE ──
+  const mg = svg.append("g")
+    .attr("class", "node-mission")
+    .attr("transform", `translate(${DATA.mission.x - MW/2},${DATA.mission.y - MH/2})`)
+    .style("cursor","pointer")
+    .on("click", () => showMissionDetail());
+
+  mg.append("rect")
+    .attr("width", MW).attr("height", MH).attr("rx", 10)
+    .attr("filter", "url(#glow-accent)");
+
+  mg.append("text")
+    .attr("class", "node-label accent")
+    .attr("x", MW/2).attr("y", 22)
+    .attr("text-anchor","middle")
+    .attr("font-size", 13)
+    .text("⬡ " + DATA.mission.title);
+
+  mg.append("text")
+    .attr("class", "node-label dim")
+    .attr("x", MW/2).attr("y", 40)
+    .attr("text-anchor","middle")
+    .attr("font-size", 10)
+    .text("AKTIVE MISSION");
+
+  // ── TASK NODES ──
+  DATA.tasks.forEach(t => {
+    const g = svg.append("g")
+      .attr("class", `node-task ${t.status === "done" ? "done" : ""} ${t.drift ? "drift" : ""} ${t.status === "in-progress" ? "active-task" : ""}`)
+      .attr("transform", `translate(${t.x - TW/2},${t.y - TH/2})`)
+      .on("click", () => showTaskDetail(t));
+
+    g.append("rect").attr("width", TW).attr("height", TH).attr("rx", 7);
+
+    // status dot
+    const dotColor = t.status === "done" ? "var(--done)" : t.status === "in-progress" ? "var(--accent)" : "var(--text-dim)";
+    g.append("circle")
+      .attr("class","status-dot")
+      .attr("cx", 14).attr("cy", TH/2)
+      .attr("r", 4)
+      .attr("fill", dotColor);
+
+    // drift indicator
+    if (t.drift) {
+      g.append("text")
+        .attr("class","node-label warn")
+        .attr("x", TW - 14).attr("y", TH/2 + 4)
+        .attr("text-anchor","middle")
+        .attr("font-size", 13)
+        .text("⚠");
+    }
+
+    // checkmark if done
+    if (t.status === "done") {
+      g.append("text")
+        .attr("class","node-label")
+        .attr("x", TW - 14).attr("y", TH/2 + 4)
+        .attr("text-anchor","middle")
+        .attr("font-size", 12)
+        .attr("fill","var(--done)")
+        .text("✓");
+    }
+
+    // title (truncate)
+    const label = t.title.length > 22 ? t.title.slice(0,21)+"…" : t.title;
+    g.append("text")
+      .attr("class", "node-label")
+      .attr("x", 26).attr("y", TH/2 + 4)
+      .attr("font-size", 12)
+      .text(label);
+  });
+
+  // ── FILE NODES ──
+  DATA.files.forEach(f => {
+    const g = svg.append("g")
+      .attr("class", `node-file ${f.drift ? "drift" : ""}`)
+      .attr("transform", `translate(${f.x - FW/2},${f.y - FH/2})`)
+      .on("click", () => showFileDetail(f));
+
+    g.append("rect").attr("width", FW).attr("height", FH).attr("rx", 5);
+
+    if (f.drift) {
+      g.append("text")
+        .attr("class","node-label warn")
+        .attr("x", FW - 12).attr("y", FH/2 + 4)
+        .attr("text-anchor","middle")
+        .attr("font-size", 12)
+        .text("⚠");
+    }
+
+    g.append("text")
+      .attr("class","node-label file-label")
+      .attr("x", 10).attr("y", FH/2 - 2)
+      .attr("font-size", 10)
+      .text("📄");
+
+    const fname = f.name.length > 22 ? f.name.slice(0,21)+"…" : f.name;
+    g.append("text")
+      .attr("class","node-label file-label")
+      .attr("x", 24).attr("y", FH/2 + 4)
+      .attr("font-size", 11)
+      .text(fname);
+
+    g.append("text")
+      .attr("class","node-label dim")
+      .attr("x", FW/2).attr("y", FH + 14)
+      .attr("text-anchor","middle")
+      .attr("font-size", 9)
+      .text("v" + f.version);
+  });
+
+  // ── PARKING NODES ──
+  DATA.parking.forEach(p => {
+    const g = svg.append("g")
+      .attr("class","node-parking")
+      .attr("transform", `translate(${p.x - PW/2},${p.y - PH/2})`)
+      .on("click", () => promoteParking(p));
+
+    g.append("rect").attr("width", PW).attr("height", PH).attr("rx", 20);
+
+    const plabel = p.title.length > 18 ? p.title.slice(0,17)+"…" : p.title;
+    g.append("text")
+      .attr("class","node-label parking-label")
+      .attr("x", PW/2).attr("y", PH/2 + 4)
+      .attr("text-anchor","middle")
+      .attr("font-size", 11)
+      .text(plabel);
+  });
+}
+
+// ── DETAIL PANEL ───────────────────────────────────────────────────────────
+const panel = document.getElementById("detail");
+const content = document.getElementById("detail-content");
+
+function openPanel(html) {
+  content.innerHTML = html;
+  panel.classList.add("open");
+}
+document.getElementById("detail-close").onclick = () => panel.classList.remove("open");
+
+function statusLabel(s) {
+  if (s === "done") return '<span style="color:var(--done)">✓ Erledigt</span>';
+  if (s === "in-progress") return '<span style="color:var(--accent)">● In Arbeit</span>';
+  return '<span style="color:var(--text-dim)">○ Offen</span>';
+}
+
+function showMissionDetail() {
+  const m = DATA.mission;
+  openPanel(`
+    <h3>Mission</h3>
+    <div class="field"><label>Titel</label><div class="val">${m.title}</div></div>
+    <div class="field"><label>Warum jetzt</label><div class="val">${m.why}</div></div>
+    <div class="field"><label>MVP-Definition</label><div class="val">${m.mvp}</div></div>
+    <div class="field"><label>Datum</label><div class="val mono">${m.date}</div></div>
+    <div class="field"><label>Aktive Tasks</label><div class="val">${DATA.tasks.filter(t=>t.status!=="done").length} offen · ${DATA.tasks.filter(t=>t.status==="done").length} erledigt</div></div>
+  `);
+}
+
+function showTaskDetail(t) {
+  let driftHtml = "";
+  if (t.drift) {
+    const entries = (t.changelog || []).map(e => `<div class="drift-entry">→ ${e}</div>`).join("");
+    driftHtml = `
+      <div class="drift-box">
+        <div class="drift-title">⚠ Versions-Drift erkannt</div>
+        <div class="field"><label>Referenziert</label><div class="val mono warn">v${t.refVersion}</div></div>
+        <div class="field"><label>Aktuell</label><div class="val mono">v${t.currentVersion}</div></div>
+        ${entries}
+        <button class="confirm-btn" onclick="confirmDrift('${t.id}')">Änderungen zur Kenntnis genommen ✓</button>
+      </div>`;
+  }
+  openPanel(`
+    <h3>Task-Detail</h3>
+    <div class="field"><label>Titel</label><div class="val">${t.title}</div></div>
+    <div class="field"><label>Status</label><div class="val">${statusLabel(t.status)}</div></div>
+    <div class="field"><label>Priorität</label><div class="val">${t.priority}</div></div>
+    ${t.ref ? `<div class="field"><label>Quelldatei</label><div class="val mono">${t.ref}</div></div>` : ""}
+    ${driftHtml}
+    <button class="btn" style="margin-top:12px;width:100%" onclick="parkTask('${t.id}')">→ In Parking Lot verschieben</button>
+  `);
+}
+
+function showFileDetail(f) {
+  let driftHtml = f.drift ? `
+    <div class="drift-box">
+      <div class="drift-title">⚠ Referenzierte Tasks haben veraltete Version</div>
+      <div class="drift-entry">Mindestens ein Task referenziert eine ältere Version dieser Datei.</div>
+    </div>` : "";
+  openPanel(`
+    <h3>Quelldatei</h3>
+    <div class="field"><label>Dateiname</label><div class="val mono">${f.name}</div></div>
+    <div class="field"><label>Aktuelle Version</label><div class="val mono">v${f.version}</div></div>
+    ${driftHtml}
+    <div class="field"><label>Hinweis</label><div class="val" style="font-size:11px;color:var(--text-dim)">Datei öffnen via File System Access API (Chrome/Edge). In dieser Demo nicht verfügbar.</div></div>
+  `);
+}
+
+function confirmDrift(tid) {
+  const t = DATA.tasks.find(x => x.id === tid);
+  if (t) { t.drift = false; t.refVersion = t.currentVersion; }
+  // update file drift status
+  DATA.files.forEach(f => {
+    f.drift = DATA.tasks.some(t => t.drift && t.ref === f.name);
+  });
+  panel.classList.remove("open");
+  render();
+}
+
+function parkTask(tid) {
+  const t = DATA.tasks.find(x => x.id === tid);
+  if (!t) return;
+  DATA.parking.push({ id: "p_" + tid, title: t.title, from: "Manuell geparkt" });
+  DATA.tasks.splice(DATA.tasks.indexOf(t), 1);
+  panel.classList.remove("open");
+  render();
+}
+
+function promoteParking(p) {
+  DATA.tasks.push({
+    id: "t_" + p.id,
+    title: p.title,
+    status: "open",
+    priority: "medium",
+    ref: null,
+    drift: false,
+  });
+  DATA.parking.splice(DATA.parking.indexOf(p), 1);
+  render();
+}
+
+// ── AI EXPORT ──────────────────────────────────────────────────────────────
+document.getElementById("btn-export").onclick = () => {
+  const m = DATA.mission;
+  const openTasks = DATA.tasks.filter(t => t.status !== "done");
+  const driftTasks = DATA.tasks.filter(t => t.drift);
+
+  const prompt = `# FocusGuard — AI Context Export
+Datum: ${new Date().toISOString().slice(0,10)}
+
+## Aktive Mission
+**${m.title}**
+Warum jetzt: ${m.why}
+MVP: ${m.mvp}
+
+## Offene Tasks (${openTasks.length})
+${openTasks.map(t => `- [${t.status}] ${t.title}${t.drift ? " ⚠ DRIFT" : ""}${t.ref ? ` (ref: ${t.ref} v${t.refVersion})` : ""}`).join("\n")}
+
+## Versions-Drift (${driftTasks.length} Tasks betroffen)
+${driftTasks.length === 0 ? "Kein Drift." : driftTasks.map(t => `- ${t.title}: ref v${t.refVersion} → aktuell v${t.currentVersion}`).join("\n")}
+
+## Parking Lot (${DATA.parking.length} Items)
+${DATA.parking.map(p => `- ${p.title} (aus: ${p.from})`).join("\n")}
+`;
+
+  navigator.clipboard.writeText(prompt).then(() => {
+    const toast = document.getElementById("toast");
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 2500);
+  });
+};
+
+// ── LOAD BUTTON (placeholder) ──────────────────────────────────────────────
+document.getElementById("btn-load").onclick = async () => {
+  if (!window.showOpenFilePicker) {
+    alert("File System Access API ist nur in Chrome/Edge verfügbar.\nIn dieser Demo sind Daten hardcodiert.");
+    return;
+  }
+  try {
+    const [fh] = await window.showOpenFilePicker({ types: [{ accept: { "text/markdown": [".md"] } }] });
+    alert(`Datei gewählt: ${fh.name}\nParsing von FOCUS.md ist im MVP noch nicht implementiert.`);
+  } catch (e) { /* user cancelled */ }
+};
+
+// ── INIT & RESIZE ──────────────────────────────────────────────────────────
+render();
+window.addEventListener("resize", render);
+</script>
+</body>
+</html>
