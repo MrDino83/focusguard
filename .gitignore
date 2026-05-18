@@ -1,0 +1,31 @@
+# FocusGuard — Git ignoriert alle echten Inhaltsdaten
+
+# Projektinhalte (real content, never commit)
+projects/
+
+# Archiv-Versionen
+Archiv/
+
+# Temp-Dateien
+*.tmp
+temp_parse.py
+
+# Ältere Versionen (nur 11_3 ist der aktuelle Stand)
+focusguard_11.html
+focusguard_11_2.html
+focusguard_11_extended.html
+
+# Interne Dokumente / Kontext-Dateien
+CHANGELOG.md
+FG_PROJEKTKONTEXT_CLAUDE.md
+fiktive_todo_100_tasks_v2.md
+
+# Diff- und Parse-Ausgaben
+diff_output.txt
+temp_parse.ps1
+temp_parse_output.txt
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
