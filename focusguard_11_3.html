@@ -72,6 +72,14 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
   font-size: 10px; background: var(--red); color: #fff;
   border-radius: 10px; padding: 1px 6px; margin-left: 2px; display: none;
 }
+.update-pill {
+  display: none; align-items: center; gap: 5px; font-size: 12px; font-weight: 500;
+  padding: 4px 11px; border-radius: 20px; border: 0.5px solid var(--green);
+  background: rgba(34,197,94,0.10); color: var(--green); cursor: pointer;
+  text-decoration: none; transition: background .15s;
+}
+.update-pill:hover { background: rgba(34,197,94,0.20); }
+.update-pill.visible { display: flex; }
 
 /* ── VIEWS ── */
 .view { display: none; }
@@ -320,6 +328,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
     <button class="tab-btn" onclick="switchView('graph')">Netzwerk</button>
   </div>
   <div class="header-right">
+    <a class="update-pill" id="update-pill" href="#" target="_blank" title="Neue Version herunterladen">↑ <span id="update-version">—</span></a>
     <div class="proj-toggles" id="proj-toggles"></div>
     <div class="search-box"><span style="font-size:12px;color:var(--text3)">⌕</span><input id="fg-search" type="search" placeholder="FG durchsuchen…" oninput="updateSearch(this.value)"><span class="search-count" id="search-count"></span></div>
     <button class="filter-toggle-btn" id="view-btn" onclick="toggleViewOverlay()" style="display:none">
@@ -881,13 +890,20 @@ function rawAttributeRow(key,value){return`<div class="assign-row"><span style="
 
 function openSidebar(node) {
   if(node.isFile)return openFileSidebar(node);
-  const parent=node.parent?RAW_NODES.find(n=>n.id===node.parent):null;
+  const parents=[];
+  let parent=node.parent?RAW_NODES.find(n=>n.id===node.parent):null;
+  const seenParents=new Set([node.id]);
+  while(parent&&!seenParents.has(parent.id)){parents.unshift(parent);seenParents.add(parent.id);parent=parent.parent?RAW_NODES.find(n=>n.id===parent.parent):null;}
   const subtasks=RAW_NODES.filter(n=>n.parent===node.id);
+  const contextTasks=(node.contexts||[]).map(targetId=>RAW_NODES.find(n=>n.id===targetId)).filter(Boolean);
   const pct=Math.round(calculateProgress(node.id)*100);
   document.getElementById('sb-id').textContent=node.id+(node.ref?` (${node.ref})`:'');
   document.getElementById('sb-title').textContent=node.sub||node.id;
   const labels=(node.labels||[]).map(l=>`<span class="sb-chip">${escapeHtml(l)}</span>`).join('');
-  const subt=subtasks.map(s=>{const sp=Math.round(calculateProgress(s.id)*100);const checked=s.status==='erledigt'?'checked':'';return `<div class="sb-subtask" onclick="openSidebarById('${escapeHtml(s.id)}')"><input class="sb-check" type="checkbox" ${checked} onclick="event.stopPropagation()"><span style="flex:1">${escapeHtml(s.sub)}</span><div class="sb-progress"><div class="sb-progress-fill" style="width:${sp}%"></div></div><span>${sp}%</span></div>`}).join('');
+  const taskRow=(task,options={})=>{const sp=Math.round(calculateProgress(task.id)*100);const checked=task.status==='erledigt'?'checked':'';const detail=options.detail?`<span style="font-size:10px;color:var(--text3);margin-left:4px">${escapeHtml(options.detail)}</span>`:'';return `<div class="sb-subtask" onclick="openSidebarById('${escapeHtml(task.id)}')"><input class="sb-check" type="checkbox" ${checked} onclick="event.stopPropagation()"><span style="flex:1">${escapeHtml(task.sub||task.id)}${detail}</span><div class="sb-progress"><div class="sb-progress-fill" style="width:${sp}%"></div></div><span>${sp}%</span></div>`};
+  const parentRows=parents.map(p=>taskRow(p,{detail:p.id})).join('');
+  const subt=subtasks.map(s=>taskRow(s)).join('');
+  const contextRows=contextTasks.map(t=>{const type=(node.contextDetails||[]).find(x=>x.target===t.id)?.type||'context';return taskRow(t,{detail:`${type} · ${t.id}`});}).join('');
   const anchor=(section)=>`sb-${node.id}-${section}`.replace(/[^a-zA-Z0-9_-]/g,'-');
   const tabs=`<div class="sb-tabbar"><a class="sb-tab" href="#${anchor('stichpunkte')}">Stichpunkte (${(node.bullets||[]).length})</a><a class="sb-tab" href="#${anchor('risiken')}">Risiken (${(node.risks||[]).length})</a><a class="sb-tab" href="#${anchor('annahmen')}">Annahmen (${(node.assumptions||[]).length})</a></div>`;
   const list=(arr)=>`<div class="sb-list">${(arr||[]).map(x=>`<div>• ${escapeHtml(x)}</div>`).join('')}</div>`;
@@ -896,7 +912,9 @@ function openSidebar(node) {
   html+=sbField('Projekt / Prio / Status / Ebene',`${escapeHtml((node.project||'').toUpperCase())} | PRIO ${escapeHtml(node.priostufe||'')} | ${escapeHtml(node.status||'')} | Ebene ${escapeHtml(String(node.ebene||''))}`,{html:true});
   if(labels) html+=`<div class="sb-field"><div class="sb-label">Labels</div>${labels}</div>`;
   html+=sbField('Fortschritt kumuliert',pct+'%');
+  if(parentRows) html+=`<div class="sb-field"><div class="sb-label">Parent Tasks</div>${parentRows}</div>`;
   if(subt) html+=`<div class="sb-field"><div class="sb-label">Subtasks</div>${subt}</div>`;
+  if(contextRows) html+=`<div class="sb-field"><div class="sb-label">Kontext</div>${contextRows}</div>`;
   if(node.openPoints?.length) html+=`<div class="sb-field"><div class="sb-label">Offene Punkte</div>${list(node.openPoints)}</div>`;
   if(node.summary) html+=sbField('Zusammenfassung',node.summary);
   html+=tabs;
@@ -1345,7 +1363,34 @@ function toggleViewOverlay(){
   btn.classList.toggle('active',!visible);
 }
 
+// ── VERSION CHECK ─────────────────────────────────────────────────────────────
+const VERSION_JSON_URL = 'https://mrdino83.github.io/focusguard/version.json';
+
+function semverGt(a, b) {
+  const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i]||0) > (pb[i]||0)) return true;
+    if ((pa[i]||0) < (pb[i]||0)) return false;
+  }
+  return false;
+}
+
+async function checkForUpdates() {
+  try {
+    const r = await fetch(VERSION_JSON_URL + '?t=' + Date.now());
+    if (!r.ok) return;
+    const data = await r.json();
+    if (semverGt(data.version, FG_VERSION)) {
+      const pill = document.getElementById('update-pill');
+      document.getElementById('update-version').textContent = 'v' + data.version + ' verfügbar';
+      pill.href = data.url;
+      pill.classList.add('visible');
+    }
+  } catch (e) { /* kein Netz oder Datei fehlt — still ignorieren */ }
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
+checkForUpdates();
 loadTodoMd().then(()=>{
   initFilters();
   buildProjToggles();

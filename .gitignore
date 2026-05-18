@@ -15,6 +15,7 @@ focusguard_11.html
 focusguard_11_2.html
 focusguard_11_extended.html
 
+# version.json gehört ins Repo (update-check)
 # Interne Dokumente / Kontext-Dateien
 CHANGELOG.md
 FG_PROJEKTKONTEXT_CLAUDE.md
