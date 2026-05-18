@@ -1,7 +1,7 @@
 **Sensitivität:** 🔵 INTERNAL
-**Version:** 0.1.0
+**Version:** 0.2.0
 **Erstellt:** 2026-05-13
-**Letzte Aktualisierung:** 2026-05-13
+**Letzte Aktualisierung:** 2026-05-18
 **Quelle:** Claude+Review
 **Verantwortlich:** Digitale Geschäftsentwicklung
 
@@ -13,6 +13,7 @@
 > ohne Vorgeschichte. Einmalig lesen — danach operativ arbeitsfähig.
 > Es fasst alle Governance-, Architektur- und Designentscheidungen zusammen
 > die in der Entstehungsgeschichte von FocusGuard getroffen wurden.
+> Normatives Regelwerk: FG_GOVERNANCE_v03.md (maßgeblich bei Widersprüchen).
 
 ---
 
@@ -26,7 +27,7 @@ KI-Anwendungen löst:
 |---|---|
 | Fokus-Verlust beim Arbeiten | Aktive Mission mit Parking Lot für zurückgestellte Ideen |
 | Datei-Drift | Erkennt wenn referenzierte `.md`-Quelldateien sich verändert haben |
-| Fehlende LLM-Lesbarkeit | Erzwungene, maschinenlesbare Datenstrukturen in FOCUS.md |
+| Fehlende LLM-Lesbarkeit | Erzwungene, maschinenlesbare FG-Blöcke direkt in TODO.md |
 
 FocusGuard ist **kein eigenes Task-Management-System**. Es ist ein
 **Fokus-Layer** über einer bestehenden Projektstruktur (z.B. der EKB).
@@ -36,28 +37,28 @@ FocusGuard ist **kein eigenes Task-Management-System**. Es ist ein
 ## 2. Architektur — Grundprinzipien (nicht verhandelbar)
 
 ```
-TODO.md                     ← Führendes Backlog-System (nur lesend)
-   ↓ referenziert per ID
-FOCUS.md                    ← Einzige Datei die FG schreibt (pro Projekt)
-   ↓ liest und zeigt
+TODO.md                     ← Führendes Backlog-System
+   ↓ FG-Blöcke eingebettet (FocusGuard schreibt nur in diese)
 FocusGuard App (HTML)       ← Läuft lokal im Browser, kein Server
 ```
 
 **Absolut geltende Regeln:**
-- FocusGuard schreibt **niemals** in TODO.md zurück
+- FocusGuard schreibt **ausschließlich in FG-Blöcke innerhalb von TODO.md**
+- FOCUS.md entfällt — kein separates Persistenzmedium
 - Kein Backend, kein Build, kein Deployment
 - Alle Daten liegen lokal im Projektordner (OneDrive-sync-fähig)
 - Offline-fähig, keine Internetverbindung erforderlich
 - Kein localStorage / IndexedDB (Daten nicht im Projektordner)
-- TODO.md wird **nicht** migriert oder reformatiert
+- TODO.md-Inhalte außerhalb von FG-Blöcken werden **niemals** verändert
 - EKB-IDs (B-01, FW-01, C-01 etc.) werden **1:1 übernommen**, keine neue ID vergeben
+- FocusGuard interpretiert keine EKB-internen Governance-Regeln
 
 **Tech-Stack (festgelegt):**
 - React UMD, kein Build-Schritt
 - D3.js für Netzwerkgraph
 - File System Access API für lokalen Dateizugriff
 - VS Code Live Server zum Starten
-- Platform: Windows (primär), Chrome/Edge
+- Plattform: Windows (primär), Chrome/Edge
 
 **Explizit abgelehnte Technologien:** Lovable, Electron, Supabase/Firebase,
 localStorage/IndexedDB, eigener MCP-Server (für MVP).
@@ -68,20 +69,19 @@ localStorage/IndexedDB, eigener MCP-Server (für MVP).
 
 ```
 OneDrive/
-├── FocusGuard/                     ← App (einmalig, projektübergreifend)
-│   ├── focusguard_11.html          ← Aktuelle App-Version
+├── FocusGuard/                         ← App (einmalig, projektübergreifend)
+│   ├── focusguard_11.html              ← Aktuelle App-Version
 │   ├── CHANGELOG.md
 │   ├── FGD_Konzept_v02.md
-│   ├── FG_GOVERNANCE_v02.md        ← Normatives Regelwerk
-│   ├── FG_PROJEKTKONTEXT_CLAUDE.md ← Dieses Dokument
+│   ├── FG_GOVERNANCE_v03.md            ← Normatives Regelwerk (aktuell)
+│   ├── FG_PROJEKTKONTEXT_CLAUDE.md     ← Dieses Dokument
 │   ├── fiktive_todo_100_tasks_v2.md
-│   └── projects/                   ← Projektdaten
+│   └── projects/                       ← Projektdaten
 │
 └── Enterprise Knowledgebase (EKB)/
-    ├── TODO.md                     ← Bestehend, unverändert, nur lesend
-    ├── FOCUS.md                    ← Neu durch FocusGuard (noch nicht angelegt)
+    ├── TODO.md                         ← Führendes System — FG schreibt nur in FG-Blöcke
     ├── 00_SYSTEM/
-    │   ├── ekb_governance.md       ← Übergeordnet zu FG-Governance
+    │   ├── ekb_governance.md           ← Übergeordnet zu FG-Governance
     │   ├── linking_convention.md
     │   └── maintenance_guide.md
     └── 02_DATENINFRASTRUKTUR/systems/
@@ -89,116 +89,65 @@ OneDrive/
         └── sys_kdb.md
 ```
 
+**Hinweis:** FOCUS.md entfällt als Datei. Alle FocusGuard-Daten
+(Mission, Tasks, Parking Lot) leben als FG-Blöcke in TODO.md.
+
 ---
 
-## 4. FOCUS.md — Vollständiges Schema
+## 4. FG-Blöcke — Übersicht
 
-### 4.1 Pflicht-Header (EKB-Standard)
+FocusGuard kennt drei Block-Typen. Alle sind HTML-Kommentar-Marker
+und für Obsidian transparent (nicht sichtbar, nicht störend).
 
-```markdown
-**Sensitivität:** [🔵 INTERNAL | 🟡 CONFIDENTIAL | 🔴 RESTRICTED]
-**Version:** [MAJOR.MINOR.PATCH]
-**Erstellt:** [YYYY-MM-DD]
-**Letzte Aktualisierung:** [YYYY-MM-DD]
-**Quelle:** [Manuell | Claude+Review]
-**Verantwortlich:** [Rolle oder Team]
-```
-
-Versionierung: MAJOR = Schemaänderung, MINOR = neuer Inhalt, PATCH = Statusänderung.
-
-### 4.2 Block-Reihenfolge (verbindlich, Parser-kritisch)
-
-```
-[EKB-Header]
----
-# FOCUS — [Projektkontext-Name]
-[Kontext-Kommentar: 1–3 Sätze. Pflicht.]
----
-## MISSION
----
-## TASKS
----
-## PARKING LOT
----
-## Changelog
-```
-
-Abschnittsbezeichner exakt in dieser Schreibweise. Abweichung = Parser-Fehler.
-Leerer Block: `<!-- Keine Einträge -->`
-
-### 4.3 Mission-Block
-
-```markdown
-## MISSION
-
-**ID:** MISSION-[PROJEKTKÜRZEL]-[YYYYMMDD]
-**Titel:** [Max. 80 Zeichen]
-**Status:** [AKTIV | PAUSIERT | ABGESCHLOSSEN]
-**Gesetzt am:** [YYYY-MM-DD]
-**Warum jetzt:** [1–3 Sätze]
-**MVP-Definition:** [1–5 Sätze]
-**Abgeschlossen am:** [YYYY-MM-DD | n/a]
-```
-
-Genau eine Mission pro FOCUS.md. Alle Felder Pflicht. Kein Feld leer — `n/a` wenn
-nicht anwendbar. Gleicher Tag, neue Mission: Suffix `-B`, `-C`.
-
-### 4.4 Task-Eintrag
-
-```markdown
-- **ID:** [Original-ID aus TODO.md | FG-NATIV-[YYYYMMDD]-[NN]]
-  **Titel:** [Freitext]
-  **Status:** [OFFEN | IN_ARBEIT | ERLEDIGT | GEPARKT]
-  **Kontext:** [MISSION | BACKLOG]
-  **Quelle:** [REF:[Original-ID] | NATIV]
-  **ref-Datei:** [./relativer/pfad.md | /absoluter/pfad.md | n/a]
-  **ref-Version:** [x.y.z | n/a]
-  **ref-Typ:** [INTERN | EXTERN | n/a]
-  **Letzte Bearbeitung:** [YYYY-MM-DD]
-  **Notiz:** [Freitext | n/a]
-```
-
-**ID-Regeln:**
-- Task aus TODO.md → Original-ID übernehmen (z.B. `B-01`), `Quelle: REF:B-01`
-- Task nur in FOCUS.md → `FG-NATIV-20260513-01`, `Quelle: NATIV`
-- Native Tasks sind die Ausnahme; wiederkehrende Tasks gehören in TODO.md
-
-**Drift-Mechanismus** (ref-Datei + ref-Version + ref-Typ):
-
-| Zustand | ref-Datei | ref-Version | ref-Typ |
+| Block-Typ | Marker | Zweck | Position in TODO.md |
 |---|---|---|---|
-| Keine Referenz | `n/a` | `n/a` | `n/a` |
-| Intern | `./pfad/datei.md` | `x.y.z` | `INTERN` |
-| Extern | `/absoluter/pfad.md` | `x.y.z` | `EXTERN` |
+| `FG:MISSION` | `<!-- FG:MISSION id="..." version="..." -->` | Aktive Mission | Dateianfang |
+| `FG:TASK` | `<!-- FG:TASK id="..." version="..." -->` | Operativer Task-Zustand | Direkt unter Task-Header |
+| `FG:PARKING` | `<!-- FG:PARKING id="..." version="..." -->` | Zurückgestellte Ideen | Dateiende |
 
-`ref-Version` wird **nur** aktualisiert wenn Nutzer Drift explizit bestätigt.
-LLM darf `ref-Version` nie eigenständig aktualisieren.
+Vollständige Block-Schemas, Pflichtfelder und Schreib-Protokoll:
+→ **FG_GOVERNANCE_v03.md §3 und §5** (maßgeblich)
 
-### 4.5 Parking-Lot-Eintrag
+### 4.1 Mission
 
-```markdown
-- **ID:** PARK-[PROJEKTKÜRZEL]-[YYYYMMDD]-[NN]
-  **Titel:** [Max. 120 Zeichen]
-  **Herkunft:** [MANUELL | TASK:[Task-ID] | MISSION:[Mission-ID]]
-  **Geparkt am:** [YYYY-MM-DD]
-  **Bezug:** [Task-ID | Mission-ID | n/a]
-  **Notiz:** [Freitext | n/a]
-```
+- Genau eine aktive Mission pro TODO.md (`fg-status: AKTIV`)
+- Zweite aktive Mission: harter Fehler, kein Schreiben
+- **Lightweight erlaubt:** nur `fg-titel`, `fg-status` und
+  `fg-letzte-fg-aenderung` sind Pflicht — alle anderen Felder `n/a`
+- `fg-letzte-fg-aenderung` trägt den Timestamp des letzten
+  FocusGuard-Schreibvorgangs im gesamten Projektkontext
 
-Parking-Lot-Items werden **nicht gelöscht** wenn sie zu Tasks werden.
-`Herkunft` wird ergänzt: `MANUELL → TASK:FG-NATIV-20260513-01`.
+### 4.2 Tasks
 
-### 4.6 Changelog-Block (immer letzter Abschnitt)
+- Jeder Task bekommt einen `FG:TASK`-Block beim ersten FocusGuard-Zugriff
+- Tasks aus TODO.md: Original-ID übernehmen (z.B. `B-01`)
+- Native Tasks (nur in FocusGuard erstellt): `FG-NATIV-[YYYYMMDD]-[NN]`
+- Native Tasks erzeugen einen minimalen Task-Header in TODO.md
+- Jeder Task muss einer Mission zugeordnet sein (`fg-mission-ref`)
+- Missionslose Tasks sind nicht erlaubt
 
-```markdown
-## Changelog
+**Timing-Felder:**
 
-| Version | Datum | Änderung | Quelle |
-|---|---|---|---|
-| 0.1.0 | YYYY-MM-DD | Initiale Erstellung | [Quelle] |
-```
+| Feld | Typ | Beschreibung |
+|---|---|---|
+| `fg-start` | YYYY-MM-DD | Arbeitsbeginn |
+| `fg-deadline` | YYYY-MM-DD | Fälligkeit |
+| `fg-ende` | YYYY-MM-DD | Tatsächliches Ende |
+| `fg-wiederkehrend` | Enum | TÄGLICH / WÖCHENTLICH / MONATLICH / QUARTALSWEISE / JÄHRLICH |
+| `fg-wiederkehrend-faktor` | Integer | Multiplikator — z.B. `2` bei WÖCHENTLICH = alle 2 Wochen |
+| `fg-naechste-faelligkeit` | YYYY-MM-DD | **Berechnet** — nie manuell setzen |
 
-Neueste Einträge unten. Nie kürzen oder löschen.
+Berechnungslogel: `fg-naechste-faelligkeit = fg-ende + (fg-wiederkehrend-faktor × Rhythmus)`
+
+### 4.3 Parking Lot
+
+- Parking-Lot-Einträge werden nicht gelöscht wenn sie zu Tasks werden
+- `fg-herkunft` wird ergänzt wenn ein Parking-Lot-Item zu einem Task wird
+
+### 4.4 Versionierung
+
+Jeder Block trägt eine eigene Versionsnummer im Öffnungs-Marker.
+Kein zentraler Changelog — Versionierung ist block-intern.
 
 ---
 
@@ -206,51 +155,64 @@ Neueste Einträge unten. Nie kürzen oder löschen.
 
 | Konfliktfeld | Führendes System |
 |---|---|
-| Priorität, Fälligkeit, Zuweisung, Backlog-Status | TODO.md |
-| Aktiver Status, Drift-Zustand, Parking-Lot | FOCUS.md |
+| Priorität, Zuweisung, Beschreibungstext, Labels | TODO.md — FocusGuard liest, schreibt nie |
+| Operativer Status (`fg-status`) | FG:TASK-Block |
+| Drift-Zustand (`fg-drift`, `fg-ref-version`) | FG:TASK-Block |
+| Parking-Lot | FG:PARKING-Block |
+| Aktive Mission | FG:MISSION-Block |
+| Timings (`fg-start`, `fg-deadline`, `fg-ende`) | FG:TASK-Block |
 | Alle EKB-weiten Governance-Regeln | ekb_governance.md (übergeordnet zu FG) |
 | Dateistruktur, Präfixe, Wiki-Links | linking_convention.md v1.2.0 |
 
-Bei Widerspruch zwischen FG-Governance und ekb_governance.md gilt **immer**
-ekb_governance.md.
+Bei Widerspruch zwischen FG-Governance und ekb_governance.md gilt
+**immer** ekb_governance.md.
+
+**FocusGuard interpretiert keine EKB-internen Governance-Regeln.**
+EKB-Regeln regeln EKB-interne Prozesse. FocusGuard-Regeln regeln
+FocusGuard-Verhalten. Die Regelungsbereiche überschneiden sich nicht.
+
+**Konflikt bei mehreren Projektkontexten:** FG-Blöcke sind nicht an
+einen Projektkontext gebunden. Bei konkurrierenden Schreibvorgängen
+gilt Last-Write-Wins. Bekannte Einschränkung — adressierbar in
+späteren Ausbaustufen.
 
 ---
 
 ## 6. LLM-Operationsregeln
 
-### Beim Lesen einer FOCUS.md
-1. Header einlesen, Version notieren
-2. MISSION-Block: `Status: AKTIV`? → aktive Mission vorhanden
-3. Tasks mit `IN_ARBEIT` oder `OFFEN` + `Kontext: MISSION` identifizieren
-4. Für jeden: `ref-Datei != n/a` → Datei zugänglich? → Version aus Header lesen
-5. Abweichung von `ref-Version` → **⚠ DRIFT** im Output markieren, **nicht** automatisch korrigieren
-6. PARKING LOT für vollständigen Kontext lesen
+### Beim Lesen einer TODO.md mit FG-Blöcken
+1. Alle `FG:MISSION`-Blöcke einlesen — genau einer sollte `fg-status: AKTIV` haben
+2. Tasks mit `fg-status: IN_ARBEIT` oder `OFFEN` und `fg-kontext: MISSION` identifizieren
+3. Für jeden Task mit `fg-ref-datei != n/a`: Datei zugänglich? → Version aus Header lesen
+4. Abweichung von `fg-ref-version` → **⚠ DRIFT** im Output markieren, **nicht** automatisch korrigieren
+5. `FG:PARKING`-Blöcke für vollständigen Kontext lesen
 
-### Beim Schreiben / Ändern
-1. Aktuelle Version aus Header lesen
+### Beim Schreiben / Ändern eines FG-Blocks
+1. Block-Version aus Öffnungs-Marker lesen
 2. Änderung durchführen
-3. Version nach Semantic-Versioning erhöhen
-4. `Letzte Aktualisierung` auf aktuelles Datum setzen
-5. Changelog-Eintrag anhängen
-6. Kein Pflichtfeld weglassen (auch `n/a` muss stehen)
+3. Block-Version nach Semantic Versioning erhöhen
+4. `fg-letzte-bearbeitung` auf aktuelles Datum setzen
+5. Bei Mission-Block: `fg-letzte-fg-aenderung` auf aktuelles Datum setzen
+6. Kein Pflichtfeld weglassen — auch `n/a` muss stehen
 7. IDs niemals ändern oder neu vergeben
-8. `ref-Version` nur mit expliziter Nutzerbestätigung aktualisieren
+8. `fg-ref-version` und `fg-drift` nur mit expliziter Nutzerbestätigung aktualisieren
+9. `fg-naechste-faelligkeit` niemals manuell setzen — immer berechnen
 
-### Beim Erstellen einer neuen FOCUS.md
-1. Header setzen, Version `0.1.0`
-2. Alle vier Blöcke anlegen mit `<!-- Keine Einträge -->`
-3. Ersten Changelog-Eintrag anlegen
-
-### Beim Überführen eines TODO.md-Tasks
-1. Original-ID übernehmen (z.B. `B-01`)
-2. `Quelle: REF:B-01` setzen
-3. `Status: OFFEN` (unabhängig vom TODO.md-Status)
-4. TODO.md bleibt unverändert
+### Beim Erstellen eines neuen FG:TASK-Blocks
+1. ID prüfen: stimmt sie mit der Task-ID in TODO.md überein? Nein → Fehler, abbrechen
+2. Alle Pflichtfelder setzen
+3. Alle optionalen Felder auf `n/a` setzen
+4. Block-Version auf `0.1.0` setzen
 
 ### Beim Parken eines Tasks
-1. `Status: GEPARKT` setzen
-2. Parking-Lot-Eintrag anlegen mit `Herkunft: TASK:[ID]`
-3. Task bleibt in TASKS-Liste (ID muss erhalten bleiben)
+1. `fg-status: GEPARKT` setzen
+2. Neuen `FG:PARKING`-Block anlegen mit `fg-herkunft: TASK:[ID]`
+3. FG:TASK-Block bleibt erhalten — ID muss erhalten bleiben
+
+### Fehlerbehandlung
+- **ID-Mismatch:** ID im Marker stimmt nicht mit Task-ID überein → harter Fehler, kein Schreiben
+- **Zweite aktive Mission:** FG:MISSION mit `fg-status: AKTIV` bereits vorhanden → harter Fehler, kein Schreiben
+- **Drift erkannt:** `fg-drift: DRIFT` setzen, visuelles ⚠-Signal — nie automatisch korrigieren
 
 ---
 
@@ -271,7 +233,7 @@ eingelesen um den Verzeichnisbaum dynamisch zu traversieren.
 1. Beim Öffnen eines Projektkontexts (immer, vollständig)
 2. Manuell via `↺ Indizieren`-Button
 3. Bei Datei-Öffnung (nur die geöffnete Datei, kein Full-Scan)
-4. Beim Speichern von FOCUS.md (partiell: nur referenzierte Dateien)
+4. Beim Speichern von FG-Blöcken (partiell: nur referenzierte Dateien)
 
 Kein Hintergrund-Polling (kein Backend → kein eigener Prozess möglich).
 
@@ -287,16 +249,16 @@ Ergänzt `linking_convention.md v1.2.0`. Bestehende Regeln gelten unverändert.
 
 | Link-Typ | Syntax | Wo zulässig |
 |---|---|---|
-| FOCUS.md selbst | `[[FOCUS]]` | Andere EKB-Dateien |
-| Mission-Referenz | `MISSION-[KÜRZEL]-[DATUM]` | Innerhalb FOCUS.md, Notiz-Felder |
-| Task-Referenz auf TODO.md | `REF:[Original-ID]` | `Quelle`-Feld in FOCUS.md Tasks |
-| Parking-Lot-Bezug | `PARK-[KÜRZEL]-[DATUM]-[NN]` | `Bezug`-Feld |
+| Mission-Referenz | `MISSION-[KÜRZEL]-[DATUM]` | `fg-mission-ref`-Feld, Notiz-Felder |
+| Task-Referenz auf TODO.md | `REF:[Original-ID]` | Freitext-Felder in FG-Blöcken |
+| Parking-Lot-Bezug | `PARK-[KÜRZEL]-[DATUM]-[NN]` | `fg-bezug`-Feld |
 
-Wiki-Links (`[[sys_cross]]`) nur in Freitext-Feldern (`Notiz`, `Warum jetzt`,
-`MVP-Definition`). Personennamen nur als `[[PERS_xxx|Name]]`, nie als Freitext.
+Wiki-Links (`[[sys_cross]]`) nur in Freitext-Feldern (`fg-notiz`, `fg-warum`,
+`fg-mvp`). Personennamen nur als `[[PERS_xxx|Name]]`, nie als Freitext.
 
-Cross-Kontext-Referenzen zwischen FOCUS.md-Dateien: über `ref-Datei` mit
-absolutem Pfad und `ref-Typ: EXTERN` — kein direkter Wiki-Link.
+Cross-Kontext-Referenzen: über `fg-ref-datei` mit absolutem Pfad — kein direkter Wiki-Link.
+
+**Hinweis:** `[[FOCUS]]`-Link entfällt — FOCUS.md existiert nicht mehr.
 
 ---
 
@@ -312,24 +274,24 @@ Stand: [YYYY-MM-DD HH:MM]
 
 --- AKTIVE MISSION ---
 ID: [Mission-ID]
-Titel: [Titel]
-Warum jetzt: [Text]
-MVP-Definition: [Text]
+Titel: [fg-titel]
+Warum jetzt: [fg-warum]
+MVP-Definition: [fg-mvp]
 
 --- AKTIVE TASKS ---
-ID: [ID] ([Quelle])
-Titel: [Titel]
-Status: [Status]
-⚠ DRIFT: [ref-Datei] — zuletzt v[ref-Version], aktuell v[aktuelle Version]
+ID: [Task-ID]
+Titel: [Titel aus TODO.md]
+Status: [fg-status]
+⚠ DRIFT: [fg-ref-datei] — zuletzt v[fg-ref-version], aktuell v[aktuelle Version]
    ↳ Geändert seit letzter Bearbeitung: [Changelog-Einträge wenn bekannt]
 
 --- PARKING LOT ---
-ID: [PARK-ID] | [Titel] | Bezug: [Bezug]
+ID: [PARK-ID] | [fg-titel] | Bezug: [fg-bezug]
 
 === END FOCUSGUARD CONTEXT ===
 ```
 
-Drift-Zeile nur wenn tatsächlich Drift vorliegt.
+Drift-Zeile nur wenn `fg-drift: DRIFT` vorliegt.
 
 ---
 
@@ -353,10 +315,12 @@ Drift-Zeile nur wenn tatsächlich Drift vorliegt.
 | Globale Suche im Header | ✅ Implementiert |
 | Projektfarben-Editor im View-Overlay | ✅ Implementiert |
 | TODO.md-Parser (Markdown-Block + Tabellenformat) | ✅ Implementiert |
+| FG-Block-Parser (FG:MISSION, FG:TASK, FG:PARKING) | ❌ Noch nicht |
 | File System Access API (echte Datei-I/O) | ❌ Noch nicht — simuliert |
+| FG-Blöcke in TODO.md schreiben (echte Persistenz) | ❌ Noch nicht |
 | FG_INDEX.md lesen und Verzeichnis traversieren | ❌ Noch nicht |
 | Drift-Prüfung gegen echte Datei-Header | ❌ Noch nicht — simuliert |
-| FOCUS.md schreiben (echte Persistenz) | ❌ Noch nicht |
+| Wiederkehrend-Logik und fg-naechste-faelligkeit berechnen | ❌ Noch nicht |
 | Multi-User / Zuständigkeiten | ❌ Geplante Ausbaustufe |
 | MCP-Server-Integration | ❌ Geplante Ausbaustufe |
 
@@ -366,25 +330,34 @@ Drift-Zeile nur wenn tatsächlich Drift vorliegt.
 
 | # | Frage | Stand |
 |---|---|---|
-| 11.1 | TRAINING.md: eigenständiges LLM-Dokument oder ist FG_GOVERNANCE_v02.md die Trainingsdatei? | Offen |
-| 11.2 | FOCUS.md in `00_INDEX.md` und `ekb_governance.md` referenzieren? | Offen |
-| 11.3 | `maintenance_guide.md` um FG-Pflegeprozesse erweitern? | Offen |
-| 11.4 | Gilt EKB §4.2 (keine `07_FEEDBACK/zyklen/`-Inhalte als Wissensquelle) auch für `ref-Datei`-Links? | Offen |
-| 11.5 | Wie verhält sich FOCUS.md zu `interview_backlog.md`? | Abgrenzung empfohlen, noch nicht formalisiert |
-| 11.6 | FocusGuard für mehrere Personen: Zuständigkeits-Konzept in FOCUS.md? | Geplant, nicht spezifiziert |
+| 11.1 | TRAINING.md: eigenständiges LLM-Dokument oder ist FG_GOVERNANCE_v03.md die Trainingsdatei? | Offen |
 | 11.7 | Visualisierung bei >10 aktiven Tasks: Filterlogik oder Zoom-/Drill-down? | Schwellwert offen |
-| 11.8 | Visuelles Design: Anlehnung an MapApp oder eigenständig? | Entschieden: MapApp-Design (DM Sans, #0f0f11, Projekt-Farbsystem) |
+
+**Geschlossene Punkte (zur Dokumentation):**
+
+| # | Frage | Entscheidung |
+|---|---|---|
+| 11.2 | FOCUS.md in `00_INDEX.md` referenzieren? | Obsolet — FOCUS.md entfällt |
+| 11.3 | `maintenance_guide.md` um FG-Pflegeprozesse erweitern? | EKB-Governance, nicht FG |
+| 11.4 | Gilt EKB §4.2 für `fg-ref-datei`-Links? | EKB-Governance, nicht FG — Regelungsbereiche überschneiden sich nicht |
+| 11.5 | Verhältnis FOCUS.md zu `interview_backlog.md`? | EKB-Governance, nicht FG |
+| 11.6 | Mehrpersonen-Zuständigkeitskonzept? | Nicht MVP — Last-Write-Wins als bekannte Einschränkung dokumentiert |
+| 11.8 | Visuelles Design | Entschieden: MapApp-Design (DM Sans, #0f0f11, Projekt-Farbsystem) |
 
 ---
 
 ## 12. Bekannte Einschränkungen (Produktivbetrieb)
 
-- Dateiinhalte werden noch nicht über File System Access API gelesen — Graph arbeitet mit Mock-Daten
-- Drift-Erkennung ist simuliert (statische `refVer`/`refVerAkt`-Felder)
-- FOCUS.md wird noch nicht zurückgeschrieben
+- FG-Block-Parser noch nicht implementiert — App arbeitet mit Mock-Daten
+- File System Access API noch nicht implementiert — kein echtes Datei-I/O
+- FG-Blöcke werden noch nicht in TODO.md geschrieben
+- Drift-Erkennung ist simuliert (statische Felder)
+- Wiederkehrend-Logik und `fg-naechste-faelligkeit`-Berechnung noch nicht implementiert
 - View-Einstellungen und Projektfarben sind Runtime-State, nicht persistent
 - Fortschrittsmodell ist deterministisch/fiktiv — kein echter Arbeitsaufwand hinterlegt
 - TODO.md-Parser liest per `fetch()` vom lokalen Server — erfordert VS Code Live Server
+- Last-Write-Wins bei mehreren Projektkontexten die denselben Task referenzieren —
+  kein Konfliktschutz, bekannte Einschränkung für Mehrbenutzer-Szenarien
 
 ---
 
@@ -393,3 +366,4 @@ Drift-Zeile nur wenn tatsächlich Drift vorliegt.
 | Version | Datum | Änderung | Quelle |
 |---|---|---|---|
 | 0.1.0 | 2026-05-13 | Initiale Erstellung — Vollständige Destillation aller Governance- und Architekturentscheidungen aus der FocusGuard-Entwicklungshistorie | Claude+Review |
+| 0.2.0 | 2026-05-18 | Architektur-Update: FOCUS.md entfällt; FG-Blöcke in TODO.md als einziges Persistenzmedium; drei Block-Typen dokumentiert; Timing-Felder inkl. Wiederkehrend mit Faktor und berechneter Nächste-Fälligkeit; Führungsregeln aktualisiert; §11 bereinigt (alle geschlossenen Punkte dokumentiert); §12 Bekannte Einschränkungen aktualisiert; Linking Convention angepasst | Claude+Review |
